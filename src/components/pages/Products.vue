@@ -1,7 +1,8 @@
 <template>
     <div>
+        <loading :active.sync="isLoading"></loading>
         <div class="text-right">
-            <button class="btn btn-primary mt-4" data-toggle="modal" @click="openModal">建立新商品</button>
+            <button class="btn btn-primary mt-4" data-toggle="modal" @click="openModal(true)">建立新商品</button>
         </div>
         <table class="table mt-4">
             <thead>
@@ -12,6 +13,7 @@
                     <th width="120" class="text-right">售價</th>
                     <th width="80">狀態</th>
                     <th width="80">編輯</th>
+                    <th width="80">刪除</th>
                 </tr>
             </thead>
             <tbody>
@@ -33,11 +35,15 @@
                         <span v-else>未啟用</span>
                     </td>
                     <td>
-                        <button class="btn btn-outline-primary btn-sm">編輯</button>
+                        <button class="btn btn-outline-primary btn-sm" @click="openModal(false,item)">編輯</button>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" @click="delProduct(item)">刪除</button>
                     </td>
                 </tr>
             </tbody>
         </table>
+        <Pagination :childPage="pagination" />
         <div class="modal fade" id="productModal" tabindex="-1" role="dialog"
             aria-labelledby="exampleModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-lg" role="document">
@@ -55,15 +61,15 @@
                     <div class="col-sm-4">
                         <div class="form-group">
                         <label for="image">輸入圖片網址</label>
-                        <input type="text" class="form-control" id="image" placeholder="請輸入圖片連結" v-model="tempProduct.imageUrl">
+                        <input type="text" class="form-control" id="image" placeholder="請輸入圖片連結" v-model="tempProduct.imgUrl">
                         </div>
                         <div class="form-group">
                         <label for="customFile">或 上傳圖片
-                            <i class="fas fa-spinner fa-spin"></i>
+                            <i class="fas fa-spinner fa-spin" v-if="status.uploading"></i>
                         </label>
-                        <input type="file" id="customFile" class="form-control" ref="files">
+                        <input type="file" id="customFile" class="form-control" ref="files" @change="uploadImg">
                         </div>
-                        <img img="https://images.unsplash.com/photo-1483985988355-763728e1935b?ixlib=rb-0.3.5&ixid=eyJhcHBfaWQiOjEyMDd9&s=828346ed697837ce808cae68d3ddc3cf&auto=format&fit=crop&w=1350&q=80"
+                        <img :src="tempProduct.imgUrl"
                         class="img-fluid" alt="">
                     </div>
                     <div class="col-sm-8">
@@ -123,11 +129,11 @@
             </div>
             </div>
             <div class="modal fade" id="delProductModal" tabindex="-1" role="dialog"
-            aria-labelledby="exampleModalLabel" aria-hidden="true">
+            aria-labelledby="delProductModal" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content border-0">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title" id="exampleModalLabel">
+                    <h5 class="modal-title" id="delProductModal">
                     <span>刪除產品</span>
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -139,8 +145,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-danger"
-                    >確認刪除</button>
+                    <button type="button" class="btn btn-danger" @click="updateProduct">確認刪除</button>
                 </div>
                 </div>
             </div>
@@ -150,32 +155,98 @@
 
 <script>
 import $ from 'jquery';
+import Pagination from '../Pagination';
 
 export default {
     data(){
         return {
             products: [],
-            tempProduct:{
-            }
+            tempProduct:{},
+            isNew: false,
+            isDel: false,
+            isLoading: false,
+            status: {
+                uploading: false
+            },
+            pagination: {}
         }
     },
+    components: {
+        Pagination
+    },
     methods: {
-        getProducts(){
-            const api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/products`;
+        getProducts( page = 1){
+            const api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/products?page=${page}`;
             const vm = this;
+            vm.isLoading = true;
             this.axios.get(api).then((res)=>{
                 vm.products = res.data.products;
+                vm.isLoading = false;
+                vm.pagination = res.data.pagination;
             })
         },
-        openModal(){
+        openModal( isNew,item ){
+            if( isNew ){
+                this.tempProduct = {};
+                this.isNew = true;
+            }else{
+                this.tempProduct = Object.assign({},item);
+                this.isNew = false;
+            }
             $('#productModal').modal('show');
         },
-        updateProduct(){
-            const api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/admin/product`;
+        delProduct( item ){
+            this.tempProduct = Object.assign({},item);
+            $('#delProductModal').modal('show');
+            this.isDel = true;
+        },
+        updateProduct( isDel ){
+            this.isLoading = true;
+            let api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/admin/product`;
+            let httpMethods = 'post';
             const vm = this;
-            this.axios.post(api, { data: vm.tempProduct} ).then((res)=>{
-                console.log(res.data)
+            if( !vm.isNew ){
+                api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/admin/product/${vm.tempProduct.id}`,
+                httpMethods = 'put'
+            }
+            if( vm.isDel ){
+                httpMethods = 'delete';
+            }
+            this.axios[httpMethods](api, { data: vm.tempProduct} ).then((res)=>{
+                if( res.data.success ){
+                    $('#productModal').modal('hide');
+                    $('#delProductModal').modal('hide');
+                    vm.getProducts();
+                    console.log(res.data);
+                    vm.isDel = false;
+                    vm.isLoading = false;
+                }else{
+                    vm.getProducts();
+                    alert('新增失敗');
+                    vm.isLoading = false;
+                }
             })
+        },
+        uploadImg(){
+            const vm = this;
+            const uploadedImg = this.$refs.files.files[0]
+            const formData = new FormData;
+            formData.append('file-to-upload',uploadedImg);
+            const api = `${process.env.APIPATH}/api/${process.env.CUSTOMPATH}/admin/upload`;
+            vm.status.uploading = true;
+            this.axios.post( api, formData, {
+                headers:{
+                    'Content-Type': 'multipart/form-data'
+                }
+            }).then((res) => {
+                if( res.data.success ){
+                    vm.$set( vm.tempProduct, 'imgUrl', res.data.imageUrl )
+                    vm.status.uploading = false;
+                }else{
+                    this.$bus.$emit('message:push',res.data.message,'danger');
+                }
+            })
+
         }
     },
     created(){
