@@ -5,7 +5,9 @@
             <label for="inputEmail" class="sr-only">Email address</label>
             <input type="email" id="inputEmail" class="form-control" v-model="user.username" placeholder="Email address" required autofocus autocomplete="current-password">
             <label for="inputPassword" class="sr-only">Password</label>
-            <input type="password" id="inputPassword" class="form-control" v-model="user.password" placeholder="Password" required autocomplete="current-password">
+            <input type="password" id="inputPassword" class="form-control"
+            v-model="user.password" @keyup.enter="signin"
+            placeholder="Password" required autocomplete="current-password">
             <div class="checkbox mb-3">
                 <label>
                 <input type="checkbox" value="remember-me"> Remember me
@@ -35,6 +37,8 @@ export default {
         this.axios.post(api,vm.user).then((res)=>{
             if(res.data.success){
                 vm.$router.push('/admin/products');
+            }else{
+              alert('帳號或密碼錯誤');
             }
         })
       }
